@@ -1,6 +1,8 @@
 /** For a given page-number, all the pages that must be before and after it. */
 class PageOrdering {
+  /** Which pages must be printed before this one. */
   beforeNums: Set<number> = new Set();
+  /** Which pages must be printed after this one. */
   afterNums: Set<number> = new Set();
   constructor(public pageNum: number) {}
 }
@@ -27,7 +29,6 @@ function canPrintBeforePages(p: number, pages: number[]) {
 function canPrintAfterPages(p: number, pages: number[]) {
   const ordering = orderMap.get(p);
   if (!ordering) throw `canPrintAfterPages: No ordering for page ${p}`;
-  //return !pages.some(page => ordering.afterNums.has(page));
   for (const page of pages) {
     if (ordering.afterNums.has(page)) return false;
   }
@@ -57,6 +58,7 @@ async function main1() {
   }
 
   const correctlyOrderedUpdates: Update[] = [];
+  const incorrectlyOrderedUpdates: Update[] = [];
   for (const update of updates) {
     let updateIncorrectlyOrdered = false;
     for (let i = 0; i < update.pages.length; ++i) {
@@ -84,7 +86,11 @@ async function main1() {
         }
       }
     }
-    if (!updateIncorrectlyOrdered) correctlyOrderedUpdates.push(update);
+    if (!updateIncorrectlyOrdered) {
+      correctlyOrderedUpdates.push(update);
+    } else {
+      incorrectlyOrderedUpdates.push(update);
+    }
   }
 
   console.log(`# correctly ordered updates = ${correctlyOrderedUpdates.length}`);
@@ -95,6 +101,50 @@ async function main1() {
     sum += middleValue;
   }
   console.log(`sum of middle numbers in correctly ordered updates = ${sum}`);
+
+  // Part 2.
+
+  console.log(`# of incorrectly ordered updates = ${incorrectlyOrderedUpdates.length}`);
+  const correctedUpdates: Update[] = [];
+  for (const update of incorrectlyOrderedUpdates) {
+    const newUpdate: Update = {pages: []};
+    const pages = update.pages;
+    while (pages.length > 0) {
+      const p = pages.shift()!;
+      // Determine where each page should be inserted.
+      let indexToInsertAt = 0;
+      const results: boolean[] = [];
+      // For each page already in the update, assess whether the new numbers can
+      // be inserted at the given index, and record whether it can.
+      while (indexToInsertAt <= newUpdate.pages.length) {
+        if (indexToInsertAt === 0) {
+          const afterPages = newUpdate.pages.slice(indexToInsertAt);
+          results.push(canPrintBeforePages(p, afterPages));
+        } else if (indexToInsertAt === newUpdate.pages.length) {
+          const beforePages = newUpdate.pages.slice(0, indexToInsertAt);
+          results.push(canPrintAfterPages(p, beforePages));
+        } else {
+          const beforePages = newUpdate.pages.slice(0, indexToInsertAt);
+          const afterPages = newUpdate.pages.slice(indexToInsertAt);
+          results.push(canPrintAfterPages(p, beforePages) &&
+                       canPrintBeforePages(p, afterPages));
+        }
+        indexToInsertAt++;
+      }
+      // Find the last true result, and insert the page there.
+      newUpdate.pages.splice(results.findLastIndex(r => !!r), 0, p);
+    }
+    correctedUpdates.push(newUpdate);
+  } // for each incorrectly-ordered update
+
+  let correctedSum = 0;
+  for (const u of correctedUpdates) {
+    const index = Math.floor(u.pages.length / 2);
+    const middleValue = u.pages[index];
+    correctedSum += middleValue;
+  }
+  console.log(`sum of middle numbers in corrected ordered updates = ${correctedSum}`);
+
 }
 
 main1();
