@@ -22,7 +22,7 @@ function readNumber(s: string, i: number): string {
 }
 
 async function main() {
-  const inputTxt = await Deno.readTextFile('input.txt');
+  const inputTxt = await Deno.readTextFile('./03/input.txt');
   let total = 0;
   let mulsEnabled = true;
   for (let c = 0; c < inputTxt.length; ++c) {

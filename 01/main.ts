@@ -1,6 +1,6 @@
 
 async function mainA() {
-  const lines = (await Deno.readTextFile('input.txt')).split(/\r?\n/);
+  const lines = (await Deno.readTextFile('./01/input.txt')).split(/\r?\n/);
   const leftList: number[] = [];
   const rightList: number[] = [];
   const rightCountMap: Map<number, number> = new Map();

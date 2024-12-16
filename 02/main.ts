@@ -42,7 +42,7 @@ function isReportSafe(levels: number[]): boolean {
 }
 
 async function mainA() {
-  const reports = (await Deno.readTextFile('input.txt')).split(/\r?\n/);
+  const reports = (await Deno.readTextFile('./02/input.txt')).split(/\r?\n/);
   let numSafeReports = 0;
   let numDampenedSafeReports = 0;
   for (const report of reports) {
