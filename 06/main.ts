@@ -4,6 +4,10 @@ interface Point {
 }
 type Vec = Point;
 
+function ptToString(p: Point): string {
+  return `(${p.x}, ${p.y})`;
+}
+
 enum Facing {
   N = 1, E, S, W
 }
@@ -24,7 +28,6 @@ function rotateFacing(facing: Facing, clockwise: boolean): Facing {
   }
   return facing;
 }
-
 
 class Guard {
   facing: Facing = Facing.N;
@@ -48,9 +51,28 @@ enum Terrain {
 }
 
 class Space {
+  private guardVisited: Set<Facing> = new Set();
+
   constructor(public pt: Point = {x: 0, y: 0},
-              public terrain: Terrain = Terrain.EMPTY,
-              public guardVisited: boolean = false) {}
+              public terrain: Terrain = Terrain.EMPTY) {}
+
+  hasVisited(): boolean {
+    return this.guardVisited.size > 0;
+  }
+
+  reset() {
+    this.guardVisited.clear();
+  }
+
+  /**
+   * Visits by the guard while facing in the given direction. Returns true if
+   * they have been on this space before facing the same way.
+   */
+  visit(f: Facing): boolean {
+    const isLooping = this.guardVisited.has(f);
+    this.guardVisited.add(f);
+    return isLooping;
+  }
 }
 
 function getFacingVec(f: Facing): Vec {
@@ -63,13 +85,11 @@ function getFacingVec(f: Facing): Vec {
   throw `Bad facing: ${f}`;
 }
 
-function ptToString(p: Point): string {
-  return `(${p.x}, ${p.y})`;
-}
-
 class LabMap {
   guard: Guard = new Guard();
   spaces: Space[][] = [];
+  startingPt: Point|undefined;
+
   constructor(public W: number, public H: number) {
     // Initialize empty map.
     for (let y = 0; y < H; ++y) {
@@ -78,7 +98,6 @@ class LabMap {
       for (let x = 0; x < W; ++x) {
         newRow.push(new Space());
       }
-      newRow
     }
   }
 
@@ -104,7 +123,7 @@ class LabMap {
       } else {
         this.guard.setPos(gNextPos);
         if (guardSpace) {
-          guardSpace.guardVisited = true;
+          guardSpace.visit(this.guard.facing);
         }
       }
     }
@@ -116,7 +135,7 @@ class LabMap {
     for (let y = 0; y < this.H; ++y) {
       for (let x = 0; x < this.W; ++x) {
         const s = this.getSpace({x,y});
-        if (s && s.guardVisited) {
+        if (s && s.hasVisited()) {
           total++;
         }
       }
@@ -129,6 +148,23 @@ class LabMap {
       return undefined;
     }
     return this.spaces[p.y][p.x];
+  }
+
+  /** Resets the map and the guard to the starting point. */
+  reset() {
+    for (let y = 0; y < this.H; ++y) {
+      for (let x = 0; x < this.W; ++x) {
+        const space = this.getSpace({x,y});
+        space?.reset();
+      }
+    }
+    this.guard.facing = Facing.N;
+    this.guard.setPos(this.startingPt!);
+  }
+
+  setStartingPoint(p: Point) {
+    if (this.startingPt) throw `Already configured a starting point!`;
+    this.startingPt = {...p};
   }
 
   setTerrain(p: Point, terrain: Terrain) {
@@ -156,6 +192,7 @@ class LabMap {
       }
       s += '\n';
     }
+    s += `Guard at ${ptToString(this.guard.getPos())}`;
     return s;
   }
 }
@@ -178,10 +215,11 @@ async function readMap(filename: string): Promise<LabMap> {
             break;
           default: {
             if (ch === '^') {
+              map.setStartingPoint({x, y});
               map.guard.setPos({x, y});
               const s = map.getSpace(map.guard.getPos());
               if (s) {
-                s.guardVisited = true;
+                s.visit(map.guard.facing);
               }
               map.guard.facing = Facing.N;
             } else {
@@ -196,11 +234,19 @@ async function readMap(filename: string): Promise<LabMap> {
 }
 
 async function main1() {
-  console.log('Hell world');
   const map = await readMap('./06/input.txt');
 
   while(map.advanceGuard());
   console.log(`Guard visited ${map.getNumVisited()} unique spaces`);
 }
 
-main1();
+async function main2() {
+  const map = await readMap('./06/input_test_1.txt');
+  while(map.advanceGuard());
+  console.log(`Guard visited ${map.getNumVisited()} unique spaces`);
+  console.log(map.toString());
+  map.reset();
+  console.log(map.toString());
+}
+
+main2();
