@@ -50,10 +50,6 @@ interface Pose extends Point {
   facing: Facing;
 }
 
-function poseEquals(p1: Pose, p2: Pose): boolean {
-  return ptEquals(p1, p2) && p1.facing === p2.facing;
-}
-
 function poseToString(p: Pose): string {
   return `(${ptToString(p)}, f:${p.facing}`;
 }
@@ -92,11 +88,18 @@ enum Terrain {
  * space along with her facing.
  */
 class Space {
-  private guardVisited: Set<Facing> = new Set();
+  /** The set of all facings the guard has been pointed on this space. */
+  private readonly guardVisited: Set<Facing> = new Set();
+  /** The initial terrain set at construction time. */
+  private readonly initialTerrain: Terrain; 
 
-  constructor(public pt: Point = {x: 0, y: 0},
-              public terrain: Terrain = Terrain.EMPTY) {}
+  constructor(private readonly pt: Point = {x: 0, y: 0},
+              private terrain: Terrain) {
+    this.initialTerrain = terrain;
+  }
 
+  getPt(): Point { return this.pt; }
+  getTerrain(): Terrain { return this.terrain; }
   /** Returns true if the guard has ever been on this space. */
   hasVisited(): boolean { return this.guardVisited.size > 0; }
 
@@ -110,10 +113,21 @@ class Space {
 
   /**
    * Resets this space to its initial state. Wiping out the record of guard
-   * visits.
+   * visits and resetting its terrain to the initial terrain.
    */
   reset() {
     this.guardVisited.clear();
+    this.terrain = this.initialTerrain;
+  }
+
+  setTemporaryTerrain(nt: Terrain) {
+    this.terrain = nt;
+  }
+
+  toString(): string {
+    if (this.initialTerrain !== this.terrain) return 'O';
+    else if (this.initialTerrain === Terrain.OBSTACLE) return '#';
+    return '.';
   }
 
   /**
@@ -131,14 +145,39 @@ class LabMap {
   guard: Guard = new Guard();
   spaces: Space[][] = [];
   startingPt: Point|undefined;
+  readonly W: number;
+  readonly H: number;
 
-  constructor(public W: number, public H: number) {
-    // Initialize empty map.
-    for (let y = 0; y < H; ++y) {
-      const newRow: Space[] = [];
-      this.spaces.push(newRow);
-      for (let x = 0; x < W; ++x) {
-        newRow.push(new Space());
+  constructor(lines: string[]) {
+    this.H = lines.length;
+    this.W = lines[0].length;
+    for (let y = 0; y < this.H; ++y) {
+      const line = lines[y];
+      if (line?.length) {
+        const newRow: Space[] = [];
+        // Parse each line and create a bunch of cells...
+        for (let x = 0; x < this.W; ++x) {
+          const ch = line[x];
+          switch (ch) {
+            case Terrain.EMPTY:
+            case Terrain.OBSTACLE: 
+              newRow.push(new Space({x, y}, ch));
+              break;
+            default:
+              if (ch === '^') {
+                const newSpace = new Space({x, y}, Terrain.EMPTY);
+                if (this.startingPt) throw `Already had a starting point!`;
+                this.startingPt = {x, y};
+                this.guard.setPose({x, y, facing: Facing.N});
+                newSpace.visit(this.guard.getFacing());
+                newRow.push(newSpace);
+              } else {
+                throw `Bad map terrain = ${ch}`;
+              }
+              break;
+          }
+        }
+        this.spaces.push(newRow);
       }
     }
   }
@@ -146,8 +185,10 @@ class LabMap {
   /**
    * Moves guard one space ahead. Normally this is one space ahead in its
    * facing, but if it would hit an obstacle, turn clockwise and continue to try
-   * and move until the guard can be advanced one space.
-   * Returns true if the guard is still on the map, false if exited.
+   * and move until the guard can be advanced one space. The next space is *not*
+   * visited. The caller must do this (to mark the square as visited).
+   * Returns either the Space the guard is now on, or undefined if the guard has
+   * left the map.
    */
   advanceGuard(): Space|undefined {
     let guardSpace = this.getSpace(this.guard.getPose());
@@ -157,14 +198,13 @@ class LabMap {
     
       guardSpace = this.getSpace(maybeNextPos);
       // We hit an obstacle, so turn and repeat while loop.
-      if (guardSpace && guardSpace.terrain === Terrain.OBSTACLE) {
+      if (guardSpace && guardSpace.getTerrain() === Terrain.OBSTACLE) {
         this.guard.turn(true);
         guardSpace = origGuardSpace;
       } else {
         this.guard.setPos(maybeNextPos);
-        // If we are still on the map, we have advanced a space so return.
+        // If we are still on the map, we have advanced a space so return it.
         if (guardSpace) {
-          guardSpace.visit(this.guard.getFacing());
           return guardSpace;
         }
       }
@@ -226,32 +266,23 @@ class LabMap {
     this.startingPt = {...p};
   }
 
-  setTerrain(p: Point, terrain: Terrain) {
-    if (p.x < 0 || p.x >= this.W || p.y < 0 || p.y >= this.H) {
-      throw `Bad coord: ${ptToString(p)}`;
-    }
-    const space = this.spaces[p.y][p.x];
-    if (!space) throw `Bad space: ${ptToString(p)}`;
-    space.terrain = terrain;
-  }
-
-  toString(): string {
+  toString(showGuardAtStart: boolean = false): string {
     let s = '';
-    const gp = this.guard.getPose();
+    const gp = showGuardAtStart ? this.startingPt : this.guard.getPose();
     for (let y = 0; y < this.H; ++y) {
       for (let x = 0; x < this.W; ++x) {
         if (gp.x === x && gp.y === y) {
-          s += this.guard.getFacing();
+          s += showGuardAtStart ? '^' : this.guard.getFacing();
         } else {
           const space = this.getSpace({x,y});
           if (space) {
-            s += space.terrain;
+            s += space.toString();
           }
         }
       }
       s += '\n';
     }
-    s += `Guard pose: ${poseToString(this.guard.getPose())}`;
+    //s += `Guard pose at: ${poseToString(this.guard.getPose())}`;
     return s;
   }
 }
@@ -260,64 +291,82 @@ async function readMap(filename: string): Promise<LabMap> {
   const lines = (await Deno.readTextFile(filename)).split(/\r?\n/);
   const H = lines.length, W = lines[0].length;
   console.log(`# rows = ${H}, # cols = ${W}`);
-  const map = new LabMap(W, H);
-  for (let y = 0; y < H; ++y) {
-    const line = lines[y];
-    if (line?.length) {
-      // Parse each line and create a bunch of cells...
-      for (let x = 0; x < W; ++x) {
-        const ch = line[x];
-        const sp = map.getSpace({x, y})!;
-        sp.pt = {x, y};
-        switch (ch) {
-          case Terrain.EMPTY:
-          case Terrain.OBSTACLE: 
-            sp.terrain = ch;
-            break;
-          default: {
-            if (ch === '^') {
-              map.setStartingPoint({x, y});
-              map.guard.setPos({x, y});
-              const s = map.getSpace(map.guard.getPose());
-              if (s) {
-                s.visit(map.guard.getFacing());
-              }
-              map.guard.setFacing(Facing.N);
-            } else {
-              throw `Bad map terrain = ${ch}`;
-            }
-          }
-        }
-      }
-    }
-  }
+  const map = new LabMap(lines);
   return map;
 }
 
 async function main1() {
   const map = await readMap('./06/input.txt');
-
-  while (map.advanceGuard());
+  let nextSpace: Space|undefined;
+  do {
+    nextSpace = map.advanceGuard();
+    if (nextSpace) {
+      nextSpace.visit(map.guard.getFacing());
+    }
+  } while (nextSpace);
   console.log(`Guard visited ${map.getNumVisited()} unique spaces`);
 }
 
 async function main2() {
-  const map = await readMap('./06/input_test_1.txt');
+  const map = await readMap('./06/input.txt');
 
   const initialPath: Pose[] = [];
   let space: Space|undefined;
   do {
     space = map.advanceGuard();
     if (space) {
-      initialPath.push({...space.pt, facing:map.guard.getFacing()})
+      space.visit(map.guard.getFacing());
+      initialPath.push({...space.getPt(), facing:map.guard.getFacing()})
     }
   } while (space);
-
   console.log(`Guard visited ${map.getNumVisited()} unique spaces`);
-  console.log(map.toString());
+  // console.log(map.toString());
   console.log(`Initial path is ${initialPath.length} poses long.`);
-  map.reset();
-  console.log(map.toString());
+
+  // Idea is to go through the entire original path and check if we put an
+  // obstacle in front of the guard, do they eventually get into a loop.
+  const loopers: Space[] = [];
+  const nonLoopers: Space[] = [];
+  for (const pose of initialPath) {
+    // We cannot put an obstacle on the guard's starting position.
+    if (ptEquals(pose, map.startingPt!)) continue;
+
+    // If we already tried an obstacle at this point, and we left the map
+    // then skip it.
+    if (nonLoopers.find(s => ptEquals(s.getPt(), pose))) continue;
+    if (loopers.find(s => ptEquals(s.getPt(), pose))) continue;
+
+    // console.log(`Walking to pose ${poseToString(pose)}`);
+    // Reset the map (all its spaces and the guard).
+    map.reset();
+
+    const obstacleSpace = map.getSpace(pose);
+    if (!obstacleSpace) { throw `Bad space! at ${poseToString(pose)}`; }
+    obstacleSpace.setTemporaryTerrain(Terrain.OBSTACLE);
+
+    // Keep advancing until we either exit the map or find ourselves back on a
+    // Space facing the same direction (aka we hit a loop).
+    let nextSpace: Space|undefined;
+    do {
+      nextSpace = map.advanceGuard();
+      if (nextSpace) {
+        // Check if we were here before in this facing, that means we looped.
+        // Record the looper space and exit the loop to try the next pose.
+        if (nextSpace.hasVisitedWithFacing(map.guard.getFacing())) {
+          loopers.push(obstacleSpace);
+          break;
+        }
+        // Else just visit the square, we haven't been at thise pose before,
+        // keep stepping.
+        nextSpace.visit(map.guard.getFacing());
+      }
+      // Else, stop the do-while loop, we left the map.
+      else {
+        nonLoopers.push(obstacleSpace);
+      }
+    } while (nextSpace); // Walk from start until we exit the map or loop.
+  } // For each pose in the initial path.
+  console.log(`# of looper spaces are: ${loopers.length}`);
 }
 
 main2();
