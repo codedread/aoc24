@@ -144,27 +144,32 @@ class LabMap {
   }
 
   /**
-   * Moves guard one space ahead in its facing. If it would hit an obstacle,
-   * turn clockwise continue to try and move until the guard can be advanced.
-   * Returns true if the guard is still on the map.
+   * Moves guard one space ahead. Normally this is one space ahead in its
+   * facing, but if it would hit an obstacle, turn clockwise and continue to try
+   * and move until the guard can be advanced one space.
+   * Returns true if the guard is still on the map, false if exited.
    */
   advanceGuard(): Space|undefined {
     let guardSpace = this.getSpace(this.guard.getPose());
+    const origGuardSpace = guardSpace;
     while (guardSpace) {
-      const origGuardSpace = guardSpace;
       const maybeNextPos = this.getNextGuardPos();
     
       guardSpace = this.getSpace(maybeNextPos);
+      // We hit an obstacle, so turn and repeat while loop.
       if (guardSpace && guardSpace.terrain === Terrain.OBSTACLE) {
         this.guard.turn(true);
         guardSpace = origGuardSpace;
       } else {
         this.guard.setPos(maybeNextPos);
+        // If we are still on the map, we have advanced a space so return.
         if (guardSpace) {
           guardSpace.visit(this.guard.getFacing());
+          return guardSpace;
         }
       }
     }
+    // Else, we left the map, so return.
     return guardSpace;
   }
 
@@ -262,10 +267,12 @@ async function readMap(filename: string): Promise<LabMap> {
       // Parse each line and create a bunch of cells...
       for (let x = 0; x < W; ++x) {
         const ch = line[x];
+        const sp = map.getSpace({x, y})!;
+        sp.pt = {x, y};
         switch (ch) {
           case Terrain.EMPTY:
-          case Terrain.OBSTACLE:
-            map.setTerrain({x, y}, ch);
+          case Terrain.OBSTACLE: 
+            sp.terrain = ch;
             break;
           default: {
             if (ch === '^') {
@@ -296,9 +303,19 @@ async function main1() {
 
 async function main2() {
   const map = await readMap('./06/input_test_1.txt');
-  while (map.advanceGuard());
+
+  const initialPath: Pose[] = [];
+  let space: Space|undefined;
+  do {
+    space = map.advanceGuard();
+    if (space) {
+      initialPath.push({...space.pt, facing:map.guard.getFacing()})
+    }
+  } while (space);
+
   console.log(`Guard visited ${map.getNumVisited()} unique spaces`);
   console.log(map.toString());
+  console.log(`Initial path is ${initialPath.length} poses long.`);
   map.reset();
   console.log(map.toString());
 }
