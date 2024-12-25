@@ -10,6 +10,7 @@ enum Op {
   CONCAT = 2,
 }
 const OpsPart1 = [Op.MULTIPLY, Op.ADDITION];
+const OpsPart2 = [Op.MULTIPLY, Op.ADDITION, Op.CONCAT];
 
 async function readInput(filename: string): Promise<Equation[]> {
   const lines = (await Deno.readTextFile(filename)).split(/\r?\n/);
@@ -65,6 +66,7 @@ function getTestValueSum(eqs: Equation[], ops: Op[]): number {
         switch (opList[i]) {
           case Op.MULTIPLY: total *= eq.nums[i+1]; break;
           case Op.ADDITION: total += eq.nums[i+1]; break;
+          case Op.CONCAT: total = parseInt(`${total}${eq.nums[i+1]}`); break;
           default: throw `Bad op: ${ops[i]}`;
         }
       }
@@ -86,4 +88,11 @@ async function main1() {
   console.log(`Test value sum is ${getTestValueSum(eqs, OpsPart1)}`);
 }
 
-main1();
+async function main2() {
+  const eqs = await readInput('./07/input.txt');
+  const maxNumbers = eqs.reduce((m, eq) => Math.max(m, eq.nums.length), 0);
+  console.log(`Max nums is ${maxNumbers}, ${OpsPart1.length ** maxNumbers} permutations`);
+  console.log(`Test value sum is ${getTestValueSum(eqs, OpsPart2)}`);
+}
+
+main2();
