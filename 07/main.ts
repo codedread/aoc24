@@ -7,9 +7,9 @@ interface Equation {
 enum Op {
   MULTIPLY = 0,
   ADDITION = 1,
+  CONCAT = 2,
 }
-const Ops = [Op.MULTIPLY, Op.ADDITION];
-const NUM_OPS = Ops.length;
+const OpsPart1 = [Op.MULTIPLY, Op.ADDITION];
 
 async function readInput(filename: string): Promise<Equation[]> {
   const lines = (await Deno.readTextFile(filename)).split(/\r?\n/);
@@ -49,24 +49,20 @@ function getOpListForPermutation(p: number, b: number, n: number): Op[] {
   return ops.reverse();
 }
 
-async function main1() {
-  const eqs = await readInput('./07/input.txt');
-  const maxNumbers = eqs.reduce((m, eq) => Math.max(m, eq.nums.length), 0);
-  console.log(`Max nums is ${maxNumbers}, ${NUM_OPS ** maxNumbers} permutations`);
-
+function getTestValueSum(eqs: Equation[], ops: Op[]): number {
   let testValueSum = 0;
-  const B = NUM_OPS;
+  const B = ops.length;
   for (const eq of eqs) {
     // console.log(`Looking at ${eq.nums} for test value ${eq.testValue}:`);
     const N = eq.nums.length - 1;
     const MAX_PERMS = B ** N;
     for (let p = 0; p < MAX_PERMS; ++p) {
-      const ops = getOpListForPermutation(p, B, N);
+      const opList = getOpListForPermutation(p, B, N);
       // console.log(`p=${p},b=${B},n=${N} => [${ops}]`);
       let total = eq.nums[0];
       for (let i = 0; i < N; ++i) {
         // console.log(`i=${i}, the num is ${eq.nums[i+1]}`);
-        switch (ops[i]) {
+        switch (opList[i]) {
           case Op.MULTIPLY: total *= eq.nums[i+1]; break;
           case Op.ADDITION: total += eq.nums[i+1]; break;
           default: throw `Bad op: ${ops[i]}`;
@@ -80,8 +76,14 @@ async function main1() {
       }
     } // For each operation permutation.
   } // For each equation.
+  return testValueSum;
+}
 
-  console.log(`Test value sum is ${testValueSum}`);
+async function main1() {
+  const eqs = await readInput('./07/input_test_1.txt');
+  const maxNumbers = eqs.reduce((m, eq) => Math.max(m, eq.nums.length), 0);
+  console.log(`Max nums is ${maxNumbers}, ${OpsPart1.length ** maxNumbers} permutations`);
+  console.log(`Test value sum is ${getTestValueSum(eqs, OpsPart1)}`);
 }
 
 main1();
