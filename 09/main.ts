@@ -3,15 +3,17 @@ interface FileBlock {
   blockId: number;
   /** Pointer back to file. */
   file: File;
+  /** Which slot number this block is in. */
+  slotNumber: number;
 }
 
 class File {
   /** A list of all its blocks, in order. */
   blocks: FileBlock[];
-  constructor(public fileId: number, numBlocks: number) {
+  constructor(public fileId: number, numBlocks: number, startingSlot: number) {
     this.blocks = [];
     for (let i = 0; i < numBlocks; ++i) {
-      this.blocks.push({blockId: i, file: this});
+      this.blocks.push({blockId: i, file: this, slotNumber: startingSlot + i});
     }
   }
 }
@@ -28,7 +30,7 @@ class FileSystem {
     let nextFileId = 0;
     for (let i = 0; i < diskMap.length; i += 2) {
       const numFileBlocks = parseInt(diskMap[i]);
-      const newFile = new File(nextFileId, numFileBlocks);
+      const newFile = new File(nextFileId, numFileBlocks, this.slots.length);
       nextFileId++;
       this.files.push(newFile);
       for (const block of newFile.blocks) {
@@ -63,9 +65,7 @@ class FileSystem {
       const slot = this.slots[pos];
       // Swap this empty slot with the last non-empty one...
       if (!slot.contents) {
-        const lastSlotContents = this.slots[lastNonEmptyPos].contents;
-        this.slots[lastNonEmptyPos].contents = null;
-        this.slots[pos].contents = lastSlotContents;
+        this.swapSlots(pos, lastNonEmptyPos);
 
         // ... and then find the last non-empty slot.
         while (!this.slots[lastNonEmptyPos].contents) {
@@ -73,6 +73,51 @@ class FileSystem {
         }
       }
     }
+  }
+
+  compactFilesNoDefrag() {
+    for (let fileId = this.files.length - 1; fileId >= 0; --fileId) {
+      const fileToTryAndMove = this.files[fileId];
+      const firstSlot = fileToTryAndMove.blocks[0].slotNumber;
+      const fileBlockLength = fileToTryAndMove.blocks.length;
+      const emptySlotAvail = this.findEmptySlots(fileBlockLength, firstSlot);
+      if (emptySlotAvail === -1) continue;
+
+      for (let b = 0; b < fileToTryAndMove.blocks.length; ++b) {
+        const block = fileToTryAndMove.blocks[b];
+        this.swapSlots(block.slotNumber, emptySlotAvail + b);
+      }
+    }
+  }
+
+  /**
+   * Returns the left-most empty slot number that will fit a file of length n,
+   * or returns -1 if no contiguous empty slots exist. stopSlot is used to
+   * stop searching the entire file system.
+   */
+  findEmptySlots(n: number, stopSlot: number): number {
+    let i = 0;
+    while (i++ < stopSlot) {
+      let emptySlotsNeeded = n;
+      let j = i;
+      while (emptySlotsNeeded > 0 && !this.slots[j].contents) {
+        emptySlotsNeeded--;
+        j++;
+      }
+      if (emptySlotsNeeded === 0) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /** Swaps the contents of the two slots. */
+  swapSlots(pos1: number, pos2: number) {
+    const pos1Contents = this.slots[pos1].contents;
+    this.slots[pos1].contents = this.slots[pos2].contents;
+    this.slots[pos2].contents = pos1Contents;
+    if (this.slots[pos1].contents) this.slots[pos1].contents.slotNumber = pos1;
+    if (this.slots[pos2].contents) this.slots[pos2].contents.slotNumber = pos2;
   }
 }
 
@@ -84,4 +129,12 @@ async function main1(filename: string) {
   console.log(`File system compacted. Checksum is ${fs.checksum()}`);
 }
 
-main1('./09/input.txt');
+async function main2(filename: string) {
+  const diskMap = await Deno.readTextFile(filename);
+  console.log(`Disk map is ${diskMap.length} characters long`);
+  const fs = new FileSystem(diskMap);
+  fs.compactFilesNoDefrag();
+  console.log(`File system compacted. Checksum is ${fs.checksum()}`);
+}
+
+main2('./09/input.txt');
