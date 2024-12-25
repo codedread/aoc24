@@ -77,13 +77,24 @@ function isOnGrid(p: Point, size: Point): boolean {
  * If any of the antinodes are off the grid, they will not return. That is,
  * the returned array may have zero, one, or two points in it.
  */
-function findAntinodesForPair(p1: Point, p2: Point, grid: AntennaGrid): Point[] {
+function findAntinodesForPair(p1: Point, p2: Point, grid: AntennaGrid,
+    resonant: boolean): Point[] {
   const vec = p1.difference(p2);
+  const negvec = vec.inverse();
   const antinodes: Point[] = [];
-  const a1 = p2.addition(vec);
-  if (isOnGrid(a1, grid.size)) { antinodes.push(a1); }
-  const a2 = p1.addition(vec.inverse());
-  if (isOnGrid(a2, grid.size)) { antinodes.push(a2); }
+  if (resonant) antinodes.push(p1, p2);
+  let a1 = p2.addition(vec);
+  while (isOnGrid(a1, grid.size)) {
+    antinodes.push(a1);
+    if (!resonant) break;
+    a1 = a1.addition(vec);
+  }
+  let a2 = p1.addition(negvec);
+  while (isOnGrid(a2, grid.size)) {
+    antinodes.push(a2);
+    if (!resonant) break;
+    a2 = a2.addition(negvec);
+  }
   return antinodes;
 }
 
@@ -94,7 +105,7 @@ async function main1() {
   for (const group of grid.antennaGroups.values()) {
     const pairs = getAllPairs(group);
     for (const pair of pairs) {
-      const antinodes = findAntinodesForPair(pair[0], pair[1], grid);
+      const antinodes = findAntinodesForPair(pair[0], pair[1], grid, false);
       for (let i = 0; i < antinodes.length; ++i) {
         const antinodeStr = antinodes[i].toString();
         if (!uniqueAntiNodePts.includes(antinodeStr)) {
@@ -106,4 +117,24 @@ async function main1() {
   console.log(`Total unique antinode coords = ${uniqueAntiNodePts.length}`);
 }
 
-main1();
+
+async function main2() {
+  const grid = await readInput('./08/input.txt');
+  console.log(`Grid is ${grid.size.toString()}`);
+  const uniqueAntiNodePts: string[] = [];
+  for (const group of grid.antennaGroups.values()) {
+    const pairs = getAllPairs(group);
+    for (const pair of pairs) {
+      const antinodes = findAntinodesForPair(pair[0], pair[1], grid, true);
+      for (let i = 0; i < antinodes.length; ++i) {
+        const antinodeStr = antinodes[i].toString();
+        if (!uniqueAntiNodePts.includes(antinodeStr)) {
+          uniqueAntiNodePts.push(antinodeStr);
+        }
+      }
+    }
+  }
+  console.log(`Total unique antinode coords = ${uniqueAntiNodePts.length}`);
+}
+
+main2();
