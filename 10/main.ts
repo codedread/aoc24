@@ -38,13 +38,29 @@ interface Node {
  * Returns all leaves under node n. If n has no "to" nodes, the returned set
  * will have n in it.
  */
-function findLeaves(n: Node): Set<Node> {
+function findLeaves(n: Node): Node[] {
+  const leaves: Node[] = [];
+  if (n.to.length === 0) {
+    leaves.push(n);
+  } else {
+    for (const toNode of n.to) {
+      findLeaves(toNode).forEach(leaf => leaves.push(leaf));
+    }
+  }
+  return leaves;
+}
+
+/**
+ * Returns all leaves under node n. If n has no "to" nodes, the returned set
+ * will have n in it.
+ */
+function findUniqueLeaves(n: Node): Set<Node> {
   const leaves: Set<Node> = new Set();
   if (n.to.length === 0) {
     leaves.add(n);
   } else {
     for (const toNode of n.to) {
-      findLeaves(toNode).forEach(leaf => leaves.add(leaf));
+      findUniqueLeaves(toNode).forEach(leaf => leaves.add(leaf));
     }
   }
   return leaves;
@@ -115,12 +131,22 @@ class TrailMap {
     }
   } // constructor
 
-  /** Score each head (count unique peaks) and then sum. */
-  walkToTop(): number {
+  /** Rate each head (count unique peaks) and then sum. */
+  walkToTopRating(): number {
     let sum = 0;
     // For each head, gather all its leaves that are also peaks.
     for (const head of this.heads) {
       sum += Array.from(findLeaves(head)).filter(n => n.level === 9).length;
+    }
+    return sum;
+  }
+
+  /** Score each head (count unique peaks) and then sum. */
+  walkToTopScore(): number {
+    let sum = 0;
+    // For each head, gather all its leaves that are also peaks.
+    for (const head of this.heads) {
+      sum += Array.from(findUniqueLeaves(head)).filter(n => n.level === 9).length;
     }
     return sum;
   }
@@ -129,7 +155,13 @@ class TrailMap {
 async function main1(filename: string) {
   const lines = (await Deno.readTextFile(filename)).split(/\r?\n/);
   const trailMap = new TrailMap(lines);
-  console.log(`score sum = ${trailMap.walkToTop()}`);
+  console.log(`score sum = ${trailMap.walkToTopScore()}`);
 }
 
-main1('./10/input.txt');
+async function main2(filename: string) {
+  const lines = (await Deno.readTextFile(filename)).split(/\r?\n/);
+  const trailMap = new TrailMap(lines);
+  console.log(`rating sum = ${trailMap.walkToTopRating()}`);
+}
+
+main2('./10/input.txt');
