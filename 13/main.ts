@@ -67,6 +67,26 @@ class ClawConfig {
     }
     return -1;
   }
+
+  resolve_day2(): number {
+    const a1 = this.a.x;
+    const b1 = this.b.x;
+    const c1 = this.prize.x + 10000000000000;
+    const a2 = this.a.y;
+    const b2 = this.b.y;
+    const c2 = this.prize.y + 10000000000000;
+    const det = (a1 * b2 - a2 * b1);
+    // If determinant of the matrix is zero, it can't be solved.
+    if (det === 0) {
+      throw 'zero!';
+    }
+    const n = (a1 * c2 - a2 * c1) / det;
+    const m = (c1 - b1 * n) / a1;
+    if (Number.isInteger(m) && Number.isInteger(n)) {
+      return m * A_COST + n * B_COST;
+    }
+    return -1;
+  }
 }
 
 async function main1(filename: string) {
@@ -90,4 +110,25 @@ async function main1(filename: string) {
   console.log(`Total tokens is ${totalTokens}`);
 }
 
-main1(`./13/input.txt`);
+async function main2(filename: string) {
+  const lines = (await Deno.readTextFile(filename)).split(/\r?\n/);
+  let i = 0;
+  const configs: ClawConfig[] = [];
+  while (i < lines.length) {
+    const config = new ClawConfig(lines.slice(i, i+3));
+    // console.dir(config);
+    configs.push(config);
+    i += 4;
+  }
+
+  let totalTokens = 0;
+  for (const config of configs) {
+    const tokens = config.resolve_day2();
+    if (tokens !== -1) {
+      totalTokens += tokens;
+    }
+  }
+  console.log(`Total tokens is ${totalTokens}`);
+}
+
+main2(`./13/input.txt`);
