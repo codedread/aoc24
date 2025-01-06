@@ -8,7 +8,7 @@
       "request": "launch",
       "name": "Launch Program",
       "type": "node",
-      "program": "${workspaceFolder}/12/main.ts",
+      "program": "${workspaceFolder}/15/main.ts",
       "cwd": "${workspaceFolder}",
       "env": {},
       "runtimeExecutable": "/Users/jeffschiller/homebrew/bin/deno",
